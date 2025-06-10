@@ -1,0 +1,740 @@
+---
+title: "Cohort/Metrics Analysis For Thesis"
+output: html_document
+date: "2025-02-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install Packages
+
+```{r}
+library(dplyr)
+library(stringr)
+library(caret)
+library(boot)
+library(DescTools)
+```
+
+## Load all Data
+
+```{r}
+pdr <- read.csv("/Users/ritikabatte02/Downloads/demographic_table1.csv")
+pdr_incident <- read.csv("/Users/ritikabatte02/Downloads/DT_incidentPDR.csv")
+index <- read.csv("/Users/ritikabatte02/Downloads/match_idx.csv")
+anydept <- read.csv("/Users/ritikabatte02/Downloads/matching_any_dept.csv")
+ophth <- read.csv("/Users/ritikabatte02/Downloads/matching_ophth.csv")
+pdr_total <- read.csv("/Users/ritikabatte02/Downloads/PDR_allmethod_dates_June.csv")
+```
+
+## Remaining Data (n=270)
+
+```{r}
+pdr_remaining <- pdr[!pdr$PatientDurableKey %in% pdr_incident$PatientDurableKey, ]
+dim(pdr_remaining)
+```
+
+## Table 1: Demographics
+
+## View Total Cohort Data (n=321)
+
+```{r}
+head(pdr)
+```
+
+## Features for Table 1 [Total Cohort]
+
+# Categorize by Gender
+
+```{r}
+pdr$SexBinary <- ifelse(pdr$Sex == 'Female', 1, 0)
+mean_fem <- mean(pdr$SexBinary, na.rm = TRUE)
+mean_fem
+sd_fem <- sd(pdr$SexBinary, na.rm = TRUE)
+sd_fem
+prop.table(table(pdr$Sex))
+```
+
+# Categorize by PDR vs NPDR
+
+```{r}
+prop.table(table(pdr$pdr_npdr)*100)
+table(pdr$pdr_npdr)
+```
+
+# Categorize by PDR vs NPDR
+
+```{r}
+prop.table(table(pdr$pdr_npdr)*100)
+table(pdr$pdr_npdr)
+```
+
+# Categorize by DR diagnosis
+
+```{r}
+prop.table(table(pdr$dr_indicator))
+```
+
+# Mean and SD of Age
+
+```{r}
+mean(pdr$Age)
+sd(pdr$Age)
+```
+
+# Categorize by Race/Ethnicity
+
+```{r}
+race_pop <- pdr %>%
+  count(UCSFDerivedRaceEthnicity_X) %>%
+  mutate(proportion = n/sum(n)*100)
+
+race_pop
+```
+
+## View Incident PDR Data (n=51)
+
+## Features for Table 1 [Incident Cohort]
+
+```{r}
+head(pdr_incident)
+dim(pdr_incident)
+```
+
+# Categorize by Gender
+
+```{r}
+pdr_incident$SexBinary <- ifelse(pdr_incident$Sex == 'Female', 1, 0)
+mean_fem <- mean(pdr_incident$SexBinary, na.rm = TRUE)
+mean_fem
+sd_fem <- sd(pdr_incident$SexBinary, na.rm = TRUE)
+sd_fem
+prop.table(table(pdr_incident$SexBinary))
+```
+
+# Categorize by PDR vs NPDR
+
+```{r}
+prop.table(table(pdr_incident$pdr_npdr)*100)
+table(pdr_incident$pdr_npdr)
+```
+
+# Mean and SD of Age
+
+```{r}
+mean(pdr_incident$Age)
+sd(pdr_incident$Age)
+```
+
+# Categorize by Race/Ethnicity
+
+```{r}
+race_pop <- pdr_incident %>%
+  count(UCSFDerivedRaceEthnicity_X) %>%
+  mutate(proportion = n/sum(n)*100)
+race_pop
+```
+
+## View Remaining Cohort Data (n = 270)
+
+```{r}
+head(pdr_remaining)
+dim(pdr_remaining)
+```
+
+## Features for Table 1 [Remaining Cohort]
+
+# Categorize by Gender
+
+```{r}
+pdr_remaining$SexBinary <- ifelse(pdr_remaining$Sex == 'Female', 1, 0)
+mean_fem <- mean(pdr_remaining$SexBinary, na.rm = TRUE)
+mean_fem
+sd_fem <- sd(pdr_remaining$SexBinary, na.rm = TRUE)
+sd_fem
+```
+
+# Categorize by PDR vs NPDR
+
+```{r}
+prop.table(table(pdr_remaining$pdr_npdr)*100)
+table(pdr_remaining$pdr_npdr)
+```
+
+# Mean and SD of Age
+
+```{r}
+mean(pdr_remaining$Age)
+sd(pdr_remaining$Age)
+```
+
+# Categorize by Race/Ethnicity
+
+```{r}
+race_pop <- pdr_remaining %>%
+  count(UCSFDerivedRaceEthnicity_X) %>%
+  mutate(proportion = n/sum(n)*100)
+
+race_pop
+```
+
+## Finding incident cases across all methods
+
+# ICD 1 have dates
+
+```{r}
+icd1_date <- index %>%
+  filter(
+    !is.na(IndexDate))
+nrow(icd1_date)  
+```
+
+# ICD 2 have dates
+
+```{r}
+icd2_date <- anydept %>%
+  filter(!is.na(IndexDate))
+nrow(icd2_date)  
+```
+
+# ICD 3 have dates
+
+```{r}
+icd3_date <- ophth %>%
+  filter(
+         !is.na(IndexDate))
+nrow(icd3_date)  
+```
+
+# NLP have dates
+
+```{r}
+nlp_dates <- pdr_total %>%
+  filter(NLP_pdr == 1,
+         !is.na(NLP_date))
+nrow(nlp_dates)
+```
+
+# Combo have dates
+
+```{r}
+# Create a column for ophth 
+pdr_total$ophth <- ifelse(
+  pdr_total$PatientDurableKey %in% ophth$PatientDurableKey,
+  1, 0
+)
+
+combo_dates <- pdr_total %>%
+  filter((ophth == 1 | NLP_pdr == 1), 
+         !is.na(ICD_Index_Date),
+         !is.na(NLP_date))
+nrow(combo_dates)
+```
+
+# LLM have dates
+
+```{r}
+llm_dates <- pdr_total %>%
+  filter(LLM_pdr == 1,
+         !is.na(LLM_date))
+nrow(llm_dates)
+```
+
+# GS date
+
+```{r}
+gs_date <- pdr_total %>%
+  filter(
+         pdr_npdr == 1, 
+         pdr_date ==1 
+)
+nrow(gs_date)
+```
+
+## Finding incident PDR to the GS
+
+# ICD 9/10 code with no lookback period
+
+```{r}
+head(index)
+dim(index)
+index_incident <- index %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1, 
+         !is.na(IndexDate))
+nrow(index_incident)
+```
+
+# Match incident ICD no lookback period to incident GS date
+
+```{r}
+icd1_date_match <- index_incident %>%
+  filter(abs(as.numeric(difftime(IndexDate, pdr_date_n, units = "days"))) <= 90)
+
+total <- nrow(index_incident)
+match <- nrow(icd1_date_match)
+percent_match <- (match / total) *100
+print(percent_match)
+```
+
+# ICD 9/10 code with 1 yr
+
+```{r}
+head(anydept)
+dim(anydept)
+anydept_incident <- anydept %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1, 
+         !is.na(IndexDate))
+nrow(anydept_incident)
+```
+
+# Match incident ICD all department to incident GS date
+
+```{r}
+icd2_date_match <- anydept_incident %>%
+  filter(abs(as.numeric(difftime(IndexDate, pdr_date_n, units = "days"))) <= 90)
+
+total2 <- nrow(anydept_incident)
+match2 <- nrow(icd2_date_match)
+percent_match2 <- (match2 / total2) *100
+print(percent_match2)
+```
+
+# ICD 9/10 code with 1 yr ophth
+
+```{r}
+head(ophth)
+dim(ophth)
+ophth_incident <- ophth %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1, 
+         !is.na(IndexDate))
+nrow(ophth_incident)
+```
+
+# Match incident ICD ophth department to incident GS date
+
+```{r}
+icd3_date_match <- ophth_incident %>%
+  filter(abs(as.numeric(difftime(IndexDate, pdr_date_n, units = "days"))) <= 90)
+
+total3 <- nrow(ophth_incident)
+match3 <- nrow(icd3_date_match)
+percent_match3 <- (match3 / total3) *100
+print(percent_match3)
+```
+
+# NLP method
+
+```{r}
+nlp_incident <- pdr_total %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1,
+         NLP_pdr == 1,
+         !is.na(NLP_date))
+nrow(nlp_incident)
+```
+
+# Match incident NLP_date to incident GS date
+
+```{r}
+nlp_date_match <- nlp_incident %>%
+  filter(abs(as.numeric(difftime(NLP_date, pdr_date_n, units = "days"))) <= 90)
+
+total <- nrow(nlp_incident)
+match <- nrow(nlp_date_match)
+percent_match <- (match / total) *100
+print(percent_match)
+```
+
+# LLM method
+
+```{r}
+llm_incident <- pdr_total %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1,
+         LLM_pdr == 1, 
+         !is.na(LLM_date))
+nrow(llm_incident)
+```
+
+# Match incident LLM_date to incident GS date
+
+```{r}
+llm_date_match <- llm_incident %>%
+  filter(abs(as.numeric(difftime(LLM_date, pdr_date_n, units = "days"))) <= 90)
+
+total <- nrow(llm_incident)
+match <- nrow(llm_date_match)
+percent_match <- (match / total) *100
+print(percent_match)
+```
+
+# Combo method
+
+```{r}
+combo_NONincident <- pdr_total %>%
+  filter(NLP_pdr == 1 |
+         ophth == 1)
+nrow(combo_NONincident)
+```
+
+```{r}
+combo_incident <- pdr_total %>%
+  filter(dr_indicator == 1, 
+         pdr_npdr == 1, 
+         pdr_date == 1,
+         (NLP_pdr == 1 | ophth == 1),
+         !is.na(NLP_date),
+         !is.na(ICD_Index_Date)
+)
+nrow(combo_incident)
+```
+
+# Match incident date between NLP_date and ICD3 date to the GS date for Combination Method
+
+```{r}
+combo_date_match <- combo_incident %>%
+  filter(abs(as.numeric(difftime(NLP_date, pdr_date_n, units = "days"))) <= 90 |
+         abs(as.numeric(difftime(ICD_Index_Date, pdr_date_n, units = "days"))) <= 90)
+
+total <- nrow(combo_incident)
+match <- nrow(combo_date_match)
+percent_match <- (match / total) *100
+print(percent_match)
+```
+
+# Overlap: Of the 51 GS patients, how many appear in each method
+
+```{r}
+sum(icd1_date$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+sum(icd2_date$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+sum(icd3_date$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+sum(nlp_dates$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+sum(combo_dates$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+sum(llm_dates$PatientDurableKey %in% pdr_incident$PatientDurableKey)
+```
+
+# Seeing the overlapped patients, are they the same?
+
+```{r}
+# Example: Overlapping patients between ICD1 and gold standard
+icd1_overlap <- intersect(icd1_date$PatientDurableKey, pdr_incident$PatientDurableKey)
+
+# Repeat for others
+icd2_overlap <- intersect(icd2_date$PatientDurableKey, pdr_incident$PatientDurableKey)
+icd3_overlap <- intersect(icd3_date$PatientDurableKey, pdr_incident$PatientDurableKey)
+nlp_overlap <- intersect(nlp_dates$PatientDurableKey, pdr_incident$PatientDurableKey)
+combo_overlap <- intersect(combo_dates$PatientDurableKey, pdr_incident$PatientDurableKey)
+llm_overlap <- intersect(llm_dates$PatientDurableKey, pdr_incident$PatientDurableKey)
+
+all_ids <- unique(pdr_incident$PatientDurableKey)
+
+overlap_df <- data.frame(
+  PatientDurableKey = all_ids,
+  ICD1 = all_ids %in% icd1_overlap,
+  ICD2 = all_ids %in% icd2_overlap,
+  ICD3 = all_ids %in% icd3_overlap,
+  NLP = all_ids %in% nlp_overlap,
+  Combo = all_ids %in% combo_overlap,
+  LLM = all_ids %in% llm_overlap
+)
+
+print(overlap_df)
+```
+
+# How many patients and which ones
+
+```{r}
+sum(rowSums(overlap_df[, -1]) == 6)
+overlap_df[rowSums(overlap_df[, -1]) == 6, ]
+```
+
+# Confusion Matrix
+
+## Boostrap function 95% CI
+
+```{r}
+f1_boot <- function(data, indices) {
+  d <- data[indices, ]
+  TP <- sum(d$pred == 1 & d$ref == 1)
+  FP <- sum(d$pred == 1 & d$ref == 0)
+  FN <- sum(d$pred == 0 & d$ref == 1)
+  precision <- ifelse((TP + FP) == 0, 0, TP / (TP + FP))
+  recall <- ifelse((TP + FN) == 0, 0, TP / (TP + FN))
+  f1 <- ifelse((precision + recall) == 0, 0, 2 * (precision * recall) / (precision + recall))
+  return(f1)
+}
+```
+
+# 1 ICD
+
+```{r}
+predicted <- c(rep(1, 193), rep(0, 128))  # 193 PDR, 128 no-PDR 
+reference <- c(rep(1, 46),  # TP
+               rep(0, 147), # FP
+               rep(1, 5),  # FN
+               rep(0, 123)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 46
+FP <- 147
+FN <- 5
+TN <- 123
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
+
+# 2 ICD
+
+```{r}
+predicted <- c(rep(1, 192), rep(0, 129))  # 192 PDR, 129 no-PDR 
+reference <- c(rep(1, 45),  # TP
+               rep(0, 147), # FP
+               rep(1, 6),  # FN
+               rep(0, 123)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 45
+FP <- 147
+FN <- 6
+TN <- 123
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
+
+# 3 ICD
+
+```{r}
+predicted <- c(rep(1, 158), rep(0, 163))  # 158 PDR, 163 no-PDR 
+reference <- c(rep(1, 37),  # TP
+               rep(0, 121), # FP
+               rep(1, 14),  # FN
+               rep(0, 149)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 37
+FP <- 121
+FN <- 14
+TN <- 149
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
+
+# NLP
+
+```{r}
+predicted <- c(rep(1, 168), rep(0, 153))  # 168 PDR, 153 no-PDR 
+reference <- c(rep(1, 40),  # TP
+               rep(0, 128), # FP
+               rep(1, 11),  # FN
+               rep(0, 142)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 40
+FP <- 128
+FN <- 11
+TN <- 142
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
+
+# LLM
+
+```{r}
+predicted <- c(rep(1, 195), rep(0, 126))  # 195 PDR, 126 no-PDR 
+reference <- c(rep(1, 42),  # TP
+               rep(0, 153), # FP
+               rep(1, 9),  # FN
+               rep(0, 117)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 42
+FP <- 153
+FN <- 9
+TN <- 117
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
+
+# Combo
+
+```{r}
+predicted <- c(rep(1, 201), rep(0, 120))  # 201 PDR, 120 no-PDR 
+reference <- c(rep(1, 38),  # TP
+               rep(0, 163), # FP
+               rep(1, 13),  # FN
+               rep(0, 107)) # TN
+confusionMatrix(factor(predicted), factor(reference), mode='everything', positive = "1")
+
+# 95% CI for proportions
+TP <- 38
+FP <- 163
+FN <- 13
+TN <- 107
+
+P <- TP + FN
+N <- TN + FP
+
+# Sensitivity
+sens_ci <- BinomCI(TP, TP + FN, method = "wilson")
+# Specificity
+spec_ci <- BinomCI(TN, TN + FP, method = "wilson")
+# PPV 
+ppv_ci <- BinomCI(TP, TP + FP, method = "wilson")
+# NPV
+npv_ci <- BinomCI(TN, TN + FN, method = "wilson")
+
+# F1 score 95% CI for 1 ICD
+data <- data.frame( pred= predicted, ref = reference)
+set.seed(10)
+boot_f1 <- boot(data = data, statistic = f1_boot, R = 1000)
+f1_ci <- boot.ci(boot_f1, type = "perc")
+
+summary_metrics <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "PPV", "NPV", "Accuracy", "F1 Score"),
+  Estimate = round(c(sens_ci[1], spec_ci[1], ppv_ci[1], npv_ci[1], acc_ci[1], mean(boot_f1$t)), 3),
+  CI_Lower = round(c(sens_ci[2], spec_ci[2], ppv_ci[2], npv_ci[2], acc_ci[2], f1_ci$percent[4]), 3),
+  CI_Upper = round(c(sens_ci[3], spec_ci[3], ppv_ci[3], npv_ci[3], acc_ci[3], f1_ci$percent[5]), 3)
+)
+
+summary_metrics
+```
