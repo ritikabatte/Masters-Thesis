@@ -21,15 +21,23 @@ library(DescTools)
 ## Load all Data
 
 ```{r}
+# Total manually chart reviewed cohort (n = 321)
 pdr <- read.csv("/Users/ritikabatte02/Downloads/demographic_table1.csv")
+# Incident cohort (n = 51)
 pdr_incident <- read.csv("/Users/ritikabatte02/Downloads/DT_incidentPDR.csv")
+# First ICD Method no lookback period (n = 193)
 index <- read.csv("/Users/ritikabatte02/Downloads/match_idx.csv")
+# Second ICD Method 1-year lookback in any department (n = 192)
 anydept <- read.csv("/Users/ritikabatte02/Downloads/matching_any_dept.csv")
+# Third ICD Method 1-year lookback in any ophth department (n = 158)
 ophth <- read.csv("/Users/ritikabatte02/Downloads/matching_ophth.csv")
+# Final summary of all 6 methods with coinciding dates
+# Gold standard incident date - dr_indicator = 1, pdr_npdr = 1, pdr_date = 1
+# Gold standard PDR diagnosi - dr_indicator = 1, pdr_npdr = 1
 pdr_total <- read.csv("/Users/ritikabatte02/Downloads/PDR_allmethod_dates_June.csv")
 ```
 
-## Remaining Data (n=270)
+## Remaining Data for Table 1 (n=270)
 
 ```{r}
 pdr_remaining <- pdr[!pdr$PatientDurableKey %in% pdr_incident$PatientDurableKey, ]
